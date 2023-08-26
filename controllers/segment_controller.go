@@ -27,7 +27,7 @@ func CreateSegment(c *gin.Context) {
 
 	segment_db := db.First(&segment, segment.ID)
 
-	c.JSON(http.StatusOK, gin.H{"segment": segment_db.Value})
+	c.JSON(http.StatusOK, gin.H{"data": segment_db.Value})
 }
 
 func GetSegments(c *gin.Context) {
@@ -90,4 +90,28 @@ func AddUserToSegment(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "User added to segment successfully"})
+}
+
+func GetUserSegments(c *gin.Context) {
+	db := models.GetDB()
+	userID := c.Param("user_id")
+
+	var userSegments []models.UserSegment
+	if err := db.Where("user_id = ?", userID).Find(&userSegments).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user segments"})
+		return
+	}
+
+	segmentIDs := []uint{}
+	for _, userSegment := range userSegments {
+		segmentIDs = append(segmentIDs, userSegment.SegmentID)
+	}
+
+	var segments []models.Segment
+	if err := db.Where("id IN (?)", segmentIDs).Find(&segments).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve segments"})
+		return
+	}
+
+	c.JSON(http.StatusOK, segments)
 }

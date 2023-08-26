@@ -32,6 +32,8 @@ func main() {
 
 	// Добавление пользователя в сегмент
 	route.POST("/segments/:segment_slug/users/:user_id", controllers.AddUserToSegment)
+	// Получение активных сегментов пользователя
+	route.GET("/users/:user_id/segments", controllers.GetUserSegments)
 
 	err := route.Run()
 	if err != nil {
