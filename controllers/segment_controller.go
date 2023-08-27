@@ -1,10 +1,13 @@
 package controllers
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
+	_ "github.com/go-redis/redis/v8"
 	"net/http"
 	"strconv"
 	"testAvito/models"
+	"time"
 )
 
 type CreateSegmentInput struct {
@@ -60,20 +63,18 @@ func DeleteSegment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Segment deleted successfully"})
 }
 
-func AddUserToSegment(c *gin.Context) {
-	db := models.GetDB()
+type UserSegmentUpdateInput struct {
+	AddSegments    []string `json:"add_segments"`
+	RemoveSegments []string `json:"remove_segments"`
+}
 
-	segmentSlug := c.Param("segment_slug")
+// UpdateUserSegments Метод добавления и удаления сегментов пользователю
+func UpdateUserSegments(c *gin.Context) {
+	db := models.GetDB()
 	userIDStr := c.Param("user_id")
 	userID, err := strconv.Atoi(userIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	var segment models.Segment
-	if err := db.Where("slug = ?", segmentSlug).First(&segment).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Segment not found"})
 		return
 	}
 
@@ -83,13 +84,71 @@ func AddUserToSegment(c *gin.Context) {
 		return
 	}
 
-	userSegment := models.UserSegment{UserID: uint(userID), SegmentID: segment.ID}
-	if err := models.CreateUserSegment(db, userSegment); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add user to segment"})
+	var input UserSegmentUpdateInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User added to segment successfully"})
+	if len(input.AddSegments) == 0 && len(input.RemoveSegments) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Both add_segments and remove_segments cannot be empty"})
+		return
+	}
+
+	fmt.Println(input)
+	for _, segmentSlug := range input.AddSegments {
+		var segment models.Segment
+		if err := db.Where("slug = ?", segmentSlug).First(&segment).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Segment not found"})
+			return
+		}
+
+		userSegment := models.UserSegment{UserID: uint(userID), SegmentID: segment.ID}
+		if err := models.CreateUserSegment(db, userSegment); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add user to segment"})
+			return
+		}
+
+		// Запись истории попадания пользователя в сегмент
+		historyRecord := models.UserSegmentHistory{
+			UserID:    uint(userID),
+			SegmentID: segment.ID,
+			Operation: "add",
+			Date:      time.Now(),
+		}
+		if err := models.CreateHistory(db, historyRecord); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to log segment history"})
+			return
+		}
+
+	}
+
+	for _, segmentSlug := range input.RemoveSegments {
+		var segment models.Segment
+		if err := db.Where("slug = ?", segmentSlug).First(&segment).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Segment not found"})
+			return
+		}
+
+		if err := db.Where("user_id = ? AND segment_id = ?", user.ID, segment.ID).Delete(models.UserSegment{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove segment from user"})
+			return
+		}
+
+		// Запись истории выбывания пользователя из сегмента
+		historyRecord := models.UserSegmentHistory{
+			UserID:    uint(userID),
+			SegmentID: segment.ID,
+			Operation: "remove",
+			Date:      time.Now(),
+		}
+		if err := models.CreateHistory(db, historyRecord); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to log segment history"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User segments updated successfully"})
 }
 
 func GetUserSegments(c *gin.Context) {
@@ -102,7 +161,7 @@ func GetUserSegments(c *gin.Context) {
 		return
 	}
 
-	segmentIDs := []uint{}
+	var segmentIDs []uint
 	for _, userSegment := range userSegments {
 		segmentIDs = append(segmentIDs, userSegment.SegmentID)
 	}

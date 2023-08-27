@@ -2,10 +2,16 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"net/http"
 	"testAvito/controllers"
 	"testAvito/models"
 )
+
+// @title Internship API
+// @version 1.0
+// @description Swagger API for Internship
 
 func main() {
 	route := gin.Default()
@@ -31,11 +37,17 @@ func main() {
 	route.DELETE("/segments/:slug", controllers.DeleteSegment)
 
 	// Добавление пользователя в сегмент
-	route.POST("/segments/:segment_slug/users/:user_id", controllers.AddUserToSegment)
+	//route.POST("/segments/:segment_slug/users/:user_id", controllers.AddUserToSegment)
+
 	// Получение активных сегментов пользователя
 	route.GET("/users/:user_id/segments", controllers.GetUserSegments)
+	// Обновление сегментов пользователя
+	route.PUT("/users/:user_id/segments", controllers.UpdateUserSegments)
 
-	err := route.Run()
+	// Добавление маршрута для Swagger UI
+	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	err := route.Run(":8080")
 	if err != nil {
 		return
 	}

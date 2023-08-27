@@ -21,6 +21,14 @@ func CreateSegment(db *gorm.DB, segment Segment) error {
 	return nil
 }
 
+func GetSegmentByID(db *gorm.DB, segmentID uint) (*Segment, error) {
+	var segment Segment
+	if err := db.First(&segment, segmentID).Error; err != nil {
+		return nil, err
+	}
+	return &segment, nil
+}
+
 func CreateUserSegment(db *gorm.DB, userSegment UserSegment) error {
 	if err := db.Create(&userSegment).Error; err != nil {
 		return err

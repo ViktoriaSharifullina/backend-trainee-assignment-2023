@@ -16,3 +16,14 @@ CREATE TABLE user_segments (
                                segment_id INT REFERENCES segments(id),
                                PRIMARY KEY (user_id, segment_id)
 );
+
+-- Создание таблицы user_segment_history
+CREATE TABLE user_segment_histories (
+                                      id SERIAL PRIMARY KEY,
+                                      user_id INT NOT NULL,
+                                      segment_id INT NOT NULL,
+                                      operation VARCHAR(10) NOT NULL,
+                                      date TIMESTAMP NOT NULL,
+                                      FOREIGN KEY (user_id) REFERENCES users(id),
+                                      FOREIGN KEY (segment_id) REFERENCES segments(id)
+);
