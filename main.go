@@ -2,23 +2,14 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"net/http"
 	"testAvito/controllers"
 	"testAvito/models"
 )
 
-// @title Internship API
-// @version 1.0
-// @description Swagger API for Internship
-
 func main() {
 	route := gin.Default()
 
-	models.InitDB() // new
-
-	route.GET("/", func(context *gin.Context) {
-		context.JSON(http.StatusOK, gin.H{"message": "Hello World!"})
-	})
+	models.InitDB()
 
 	// Создание пользователя
 	route.POST("/users", controllers.CreateUser)
@@ -44,6 +35,10 @@ func main() {
 
 	// Получение отчета об изменении сегментов упользователя
 	route.GET("/history-report", controllers.GenerateSegmentHistoryReport)
+
+	db := models.GetDB() // Получение подключения к базе данных
+
+	go controllers.StartExpirationChecker(db)
 
 	err := route.Run(":8080")
 	if err != nil {

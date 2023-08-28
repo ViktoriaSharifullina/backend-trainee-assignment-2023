@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-redis/redis/v8"
+	"github.com/jinzhu/gorm"
 	"net/http"
 	"strconv"
 	"testAvito/models"
@@ -66,6 +67,52 @@ func DeleteSegment(c *gin.Context) {
 type UserSegmentUpdateInput struct {
 	AddSegments    []string `json:"add_segments"`
 	RemoveSegments []string `json:"remove_segments"`
+	TTL            int      `json:"ttl"` // New field for TTL in seconds
+}
+
+func StartExpirationChecker(db *gorm.DB) {
+	ticker := time.NewTicker(time.Minute) // Проверка каждую минуту
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			now := time.Now()
+			var expiredSegments []models.UserSegment
+
+			if err := db.Where("expires_at <= ?", now).Find(&expiredSegments).Error; err != nil {
+				fmt.Println("Error fetching expired segments:", err)
+				continue
+			}
+
+			for _, segment := range expiredSegments {
+				if err := db.Delete(&segment).Error; err != nil {
+					fmt.Println("Error deleting expired segment:", err)
+					continue
+				}
+
+				// Запись истории выбывания пользователя из сегмента
+				historyRecord := models.UserSegmentHistory{
+					UserID:    segment.UserID,
+					SegmentID: segment.SegmentID,
+					Operation: "remove",
+					Date:      now,
+				}
+				if err := models.CreateHistory(db, historyRecord); err != nil {
+					fmt.Println("Error creating segment history:", err)
+					continue
+				}
+			}
+		}
+	}
+}
+
+func calculateExpirationTime(ttl int) *time.Time {
+	if ttl <= 0 {
+		return nil // Если TTL не указан или отрицательный, то срок не устанавливается
+	}
+	expirationTime := time.Now().Add(time.Duration(ttl) * time.Second)
+	return &expirationTime
 }
 
 // UpdateUserSegments Метод добавления и удаления сегментов пользователю
@@ -95,7 +142,6 @@ func UpdateUserSegments(c *gin.Context) {
 		return
 	}
 
-	fmt.Println(input)
 	for _, segmentSlug := range input.AddSegments {
 		var segment models.Segment
 		if err := db.Where("slug = ?", segmentSlug).First(&segment).Error; err != nil {
@@ -103,8 +149,12 @@ func UpdateUserSegments(c *gin.Context) {
 			return
 		}
 
-		userSegment := models.UserSegment{UserID: uint(userID), SegmentID: segment.ID}
-		if err := models.CreateUserSegment(db, userSegment); err != nil {
+		userSegment := models.UserSegment{
+			UserID:    uint(userID),
+			SegmentID: segment.ID,
+			ExpiresAt: calculateExpirationTime(input.TTL), // Вычисляем время истечения срока с учетом TTL
+		}
+		if err := models.CreateUserSegment(db, userSegment, input.TTL); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add user to segment"})
 			return
 		}

@@ -14,7 +14,8 @@ CREATE TABLE users (
 CREATE TABLE user_segments (
                                user_id INT REFERENCES users(id),
                                segment_id INT REFERENCES segments(id),
-                               PRIMARY KEY (user_id, segment_id)
+                               PRIMARY KEY (user_id, segment_id),
+                               expires_at TIMESTAMP
 );
 
 -- Создание таблицы user_segment_history
