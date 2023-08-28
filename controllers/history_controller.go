@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testAvito/models"
 	"time"
@@ -16,28 +17,37 @@ func GenerateSegmentHistoryReport(c *gin.Context) {
 	year := c.Query("year")
 	month := c.Query("month")
 
+	reportFolderPath := "reports"
+
 	// Получение записей о попаданиях/выбываниях пользователей из сегментов за указанный период
 	var historyRecords []models.UserSegmentHistory
-	if err := db.Where("YEAR(date) = ? AND MONTH(date) = ?", year, month).Find(&historyRecords).Error; err != nil {
+	if err := db.Where("EXTRACT(YEAR FROM date) = ? AND EXTRACT(MONTH FROM date) = ?", year, month).Find(&historyRecords).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve segment history"})
 		return
 	}
 
 	// Создание CSV файла
 	filename := "segment_history_" + year + "_" + month + ".csv"
-	file, err := os.Create(filename)
+	file, err := os.Create(filepath.Join(reportFolderPath, filename))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create CSV file"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create report file"})
 		return
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to close report file"})
+		}
+	}()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
 	// Запись заголовка в CSV файл
 	header := []string{"User ID", "Segment", "Operation", "Date and Time"}
-	writer.Write(header)
+	if err := writer.Write(header); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to write header"})
+		return
+	}
 
 	// Запись данных в CSV файл
 	for _, record := range historyRecords {
@@ -53,7 +63,10 @@ func GenerateSegmentHistoryReport(c *gin.Context) {
 			record.Operation,
 			record.Date.Format(time.RFC3339),
 		}
-		writer.Write(row)
+		if err := writer.Write(row); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to write data"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Segment history report generated successfully", "link": filename})

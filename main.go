@@ -2,8 +2,6 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	"net/http"
 	"testAvito/controllers"
 	"testAvito/models"
@@ -44,8 +42,8 @@ func main() {
 	// Обновление сегментов пользователя
 	route.PUT("/users/:user_id/segments", controllers.UpdateUserSegments)
 
-	// Добавление маршрута для Swagger UI
-	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// Получение отчета об изменении сегментов упользователя
+	route.GET("/history-report", controllers.GenerateSegmentHistoryReport)
 
 	err := route.Run(":8080")
 	if err != nil {
