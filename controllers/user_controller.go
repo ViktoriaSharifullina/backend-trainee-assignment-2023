@@ -24,9 +24,9 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-	user_db := db.First(&user, user.ID)
+	userDb := db.Last(&user)
 
-	c.JSON(http.StatusOK, gin.H{"data": user_db.Value})
+	c.JSON(http.StatusOK, gin.H{"data": userDb.Value})
 }
 
 func GetUsers(c *gin.Context) {

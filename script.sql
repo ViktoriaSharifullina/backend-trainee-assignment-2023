@@ -1,7 +1,8 @@
 -- Создание таблицы segments
 CREATE TABLE segments (
                           id SERIAL PRIMARY KEY,
-                          slug VARCHAR(255) NOT NULL UNIQUE
+                          slug VARCHAR(255) NOT NULL UNIQUE,
+                          auto_assign_percent INT
 );
 
 -- Создание таблицы users

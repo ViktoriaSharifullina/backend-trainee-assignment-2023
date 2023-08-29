@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-redis/redis/v8"
@@ -12,7 +13,8 @@ import (
 )
 
 type CreateSegmentInput struct {
-	Slug string `json:"slug" binding:"required"`
+	Slug              string `json:"slug" binding:"required"`
+	AutoAssignPercent int    `json:"auto_assign_percent"`
 }
 
 func CreateSegment(c *gin.Context) {
@@ -23,15 +25,68 @@ func CreateSegment(c *gin.Context) {
 	}
 
 	db := models.GetDB()
-	segment := models.Segment{Slug: input.Slug}
+
+	segment := models.Segment{
+		Slug:              input.Slug,
+		AutoAssignPercent: input.AutoAssignPercent, // Получаем процент автоматического добавления из запроса
+	}
+
 	if err := models.CreateSegment(db, segment); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create segment"})
 		return
 	}
 
-	segment_db := db.First(&segment, segment.ID)
+	// Получаем обновленные данные о сегменте
+	var segmentDb models.Segment
+	if err := db.Last(&segmentDb).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch segment data"})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"data": segment_db.Value})
+	// Получаем общее количество пользователей
+	var totalUsersCount int
+	if err := db.Model(&models.User{}).Count(&totalUsersCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch total users count"})
+		return
+	}
+
+	// Вычисляем количество пользователей для автоматического добавления
+	autoAssignCount := int(float64(totalUsersCount) * (float64(segmentDb.AutoAssignPercent) / 100))
+
+	// Получаем случайные ID пользователей для автоматического добавления
+	var autoAssignUserIDs []uint
+	if err := db.Model(&models.User{}).Order("RANDOM()").Limit(autoAssignCount).Pluck("id", &autoAssignUserIDs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch auto assign user IDs"})
+		return
+	}
+
+	fmt.Println(autoAssignUserIDs)
+
+	// Добавляем пользователей в сегмент
+	for _, userID := range autoAssignUserIDs {
+		// Проверяем, не состоит ли уже пользователь в сегменте
+		existingUserSegment := models.UserSegment{}
+		if err := db.Where("user_id = ? AND segment_id = ?", userID, segmentDb.ID).First(&existingUserSegment).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing user segment"})
+				return
+			}
+
+			// Если запись не найдена (ErrRecordNotFound), то добавляем пользователя в сегмент
+			userSegment := models.UserSegment{
+				UserID:    userID,
+				SegmentID: segmentDb.ID,
+			}
+			if err := models.CreateUserSegment(db, userSegment); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add user to segment"})
+				return
+			}
+		}
+		// Если запись уже существует, пропускаем и переходим к следующему пользователю
+	}
+
+	// Возвращаем данные о созданном сегменте
+	c.JSON(http.StatusOK, gin.H{"data": segmentDb})
 }
 
 func GetSegments(c *gin.Context) {
@@ -154,7 +209,7 @@ func UpdateUserSegments(c *gin.Context) {
 			SegmentID: segment.ID,
 			ExpiresAt: calculateExpirationTime(input.TTL), // Вычисляем время истечения срока с учетом TTL
 		}
-		if err := models.CreateUserSegment(db, userSegment, input.TTL); err != nil {
+		if err := models.CreateUserSegment(db, userSegment); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add user to segment"})
 			return
 		}
