@@ -25,9 +25,6 @@ func main() {
 	// Удаление сегмента
 	route.DELETE("/segments/:slug", controllers.DeleteSegment)
 
-	// Добавление пользователя в сегмент
-	//route.POST("/segments/:segment_slug/users/:user_id", controllers.AddUserToSegment)
-
 	// Получение активных сегментов пользователя
 	route.GET("/users/:user_id/segments", controllers.GetUserSegments)
 	// Обновление сегментов пользователя
