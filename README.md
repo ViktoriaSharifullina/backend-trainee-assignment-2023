@@ -234,13 +234,9 @@ _**ttl(сек)** - время, в течение которого пользов
 
 **Тело ответа**
 ```json
-[
-    {
-        "ID": 1,
-        "Slug": "AVITO_VOICE_MESSAGES",
-        "auto_assign_percent": 20
-    }
-]
+{
+    "message": "User segments updated successfully"
+}
 ```
 
 ## Отчет
