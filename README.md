@@ -154,7 +154,7 @@ URL: `/segments`
     "auto_assign_persent": 20
 }
 ```
-_**auto_assign_persent** опционально_
+_**auto_assign_persent**(%) - процент автоматически добавляемых пользователей в сегмент, **опционально**_
 
 **Тело ответа**
 ```json
