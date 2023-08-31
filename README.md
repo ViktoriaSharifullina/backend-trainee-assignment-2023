@@ -150,7 +150,7 @@ URL: `/segments`
 **Тело запроса:**
 ```json
 {
-    "slug": "AVITO_VOICE_MESSAGES"
+    "slug": "AVITO_VOICE_MESSAGES",
     "auto_assign_persent": 20
 }
 ```
